@@ -1,0 +1,26 @@
+# Environment
+.env
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Distribution
+*.egg-info/
+dist/
+build/

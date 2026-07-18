@@ -9,12 +9,18 @@ from app.jobs.models import Job
 from app.companies.models import Company
 import uuid
 from sqlalchemy import func
+from app.core.redis import get_redis, get_cached, set_cache, invalidate_cache
+import redis as redis_module
+
+JOBS_CACHE_KEY = "jobs:all"
+JOBS_SEARCH_CACHE_PREFIX = "jobs:search:"
 
 router = APIRouter(tags=["jobs"])
 
 
 @router.post("/job", response_model=JobResponse)
-def create_job(job : JobCreate, db : Annotated[Session, Depends(get_db)], current_user : Annotated[User, Depends(get_current_user)]):
+def create_job(job : JobCreate, db : Annotated[Session, Depends(get_db)], current_user : Annotated[User, Depends(get_current_user)],
+               redis_client: Annotated[redis_module.Redis,Depends(get_redis)]):
     if current_user.role != UserRole.EMPLOYER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail= "Not authorized")
     company = db.query(Company).filter(Company.id == job.company_id, Company.owner_id==current_user.id).first()
@@ -24,23 +30,37 @@ def create_job(job : JobCreate, db : Annotated[Session, Depends(get_db)], curren
     db.add(job_data)
     db.commit()
     db.refresh(job_data)
+    invalidate_cache(redis_client, "jobs:*")
+
     return db.query(Job).options(joinedload(Job.company)).filter(Job.id == job_data.id).first()
 
 @router.get("/job", response_model=list[JobResponse])
-def get_all_jobs(db : Annotated[Session, Depends(get_db)]):
+def get_all_jobs(db : Annotated[Session, Depends(get_db)],redis_client : Annotated[redis_module.Redis,Depends(get_redis)]):
+    cached = get_cached(redis_client,JOBS_CACHE_KEY)
+    if cached:
+        return cached
     jobs = db.query(Job).options(joinedload(Job.company)).all()
+
+    jobs_data = [JobResponse.model_validate(job).model_dump(mode="json") for job in jobs]
+    set_cache(redis_client,JOBS_CACHE_KEY,jobs_data)
     return jobs
 
 @router.get("/jobs/search", response_model=list[JobResponse])
 def search_jobs(
     q: str,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
+    redis_client : Annotated[redis_module.Redis,Depends(get_redis)]
 ):
     if not q or len(q.strip()) == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Search query cannot be empty"
         )
+    cache_key = f"{JOBS_SEARCH_CACHE_PREFIX}{q.lower().strip()}"
+
+    cached = get_cached(redis_client,cache_key)
+    if cached:
+        return cached
     
     search_query = func.plainto_tsquery('english', q)
     
@@ -54,10 +74,13 @@ def search_jobs(
     
     if not jobs:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+              status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No jobs found matching '{q}'"
         )
     
+    jobs_data = [JobResponse.model_validate(job).model_dump(mode="json") for job in jobs]
+    set_cache(redis_client,cache_key,jobs_data)
+
     return jobs
 
 @router.get("/job/{id}",response_model=JobResponse)

@@ -63,7 +63,7 @@ def get_all_jobs(db : Annotated[Session, Depends(get_db)],redis_client : Annotat
         "has_next": page < total_pages,
         "has_previous": page > 1
     }
-    set_cache(redis_client,cache_key,jobs_data)
+    set_cache(redis_client,cache_key,response) #type: ignore
     return response
 
 @router.get("/jobs/search", response_model=PaginatedResponse[JobResponse])

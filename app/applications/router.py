@@ -9,6 +9,7 @@ from app.auth.dependency import get_current_user
 from app.jobs.models import Job
 from sqlalchemy.exc import IntegrityError
 import uuid
+from app.tasks import send_application_confirmation
 
 router = APIRouter(tags = ["Applications"])
 
@@ -29,6 +30,20 @@ def create_application(application : ApplicationCreate, db : Annotated[Session, 
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Job already applied")
+    # Fetch job with company details for the email
+    job_with_company = db.query(Job).options(
+        joinedload(Job.company)
+    ).filter(Job.id == application.job_id).first()
+
+    # Queue the email task — this returns IMMEDIATELY
+    # The actual email is sent by the Celery worker separately
+    if job_with_company is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Job not found(Company)")
+    send_application_confirmation.delay(
+        applicant_email=current_user.email,
+        job_title=job_with_company.title,
+        company_name=job_with_company.company.name
+    )
     return db.query(Application).options(joinedload(Application.job).joinedload(Job.company)).filter(Application.id == app.id).first()
 
 @router.get("/application/me",response_model=list[ApplicationResponse])

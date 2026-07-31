@@ -67,3 +67,28 @@ def upload_resume(
     
     # 6. Return just the filename (as you decided)
     return {"filename": unique_filename}
+
+from fastapi.responses import StreamingResponse
+from botocore.exceptions import ClientError
+
+@router.get("/download/resume/{filename}")
+def download_resume(
+    filename: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    s3=Depends(get_s3_client)
+):
+    try:
+        file_obj = s3.get_object(
+            Bucket=settings.MINIO_BUCKET_NAME,
+            Key=filename
+        )
+        return StreamingResponse(
+            file_obj["Body"],
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ClientError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found"
+        )

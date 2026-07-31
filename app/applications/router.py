@@ -39,7 +39,7 @@ def create_application(application : ApplicationCreate, db : Annotated[Session, 
     # The actual email is sent by the Celery worker separately
     if job_with_company is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Job not found(Company)")
-    send_application_confirmation.delay(
+    send_application_confirmation.delay( #type:ignore
         applicant_email=current_user.email,
         job_title=job_with_company.title,
         company_name=job_with_company.company.name

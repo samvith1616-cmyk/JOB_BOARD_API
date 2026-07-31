@@ -6,7 +6,7 @@ import asyncio
 # Email server configuration — created once when the file loads
 mail_config = ConnectionConfig(
     MAIL_USERNAME=settings.MAIL_USERNAME,
-    MAIL_PASSWORD=settings.MAIL_PASSWORD,
+    MAIL_PASSWORD=settings.MAIL_PASSWORD, #type: ignore
     MAIL_FROM=settings.MAIL_FROM,
     MAIL_PORT=settings.MAIL_PORT,
     MAIL_SERVER=settings.MAIL_SERVER,
@@ -21,7 +21,7 @@ def send_application_confirmation(self, applicant_email: str, job_title: str, co
         # Build the email message
         message = MessageSchema(
             subject=f"Application Received — {job_title}",
-            recipients=[applicant_email],
+            recipients=[applicant_email], # type: ignore
             body=f"""
 Hi,
 

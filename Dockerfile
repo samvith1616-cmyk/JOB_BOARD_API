@@ -6,7 +6,14 @@ COPY requirements.txt .
 
 RUN pip install -r requirements.txt
 
-COPY . .
+# Create an unprivileged user
+RUN useradd --create-home --shell /bin/bash appuser
+
+# Copy application files and give ownership to appuser
+COPY --chown=appuser:appuser . .
+
+# Run everything after this point as appuser
+USER appuser
 
 EXPOSE 8000
 

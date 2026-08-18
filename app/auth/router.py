@@ -10,6 +10,7 @@ import redis
 from app.core.redis import get_redis, blacklist_token, is_token_blacklisted
 from app.core.security import decode_token, get_token_remaining_ttl
 from app.auth.dependency import get_current_user
+from loguru import logger
 
 
 router = APIRouter(tags = ["Auth"])
@@ -19,11 +20,14 @@ router = APIRouter(tags = ["Auth"])
 def login_user(user : Annotated[ OAuth2PasswordRequestForm , Depends()], db : Annotated[ Session, Depends(get_db)]):
     db_user = db.query(User).filter(User.email == user.username).first()
     if not db_user:
+        logger.warning(f"Failed login — email not found: {user.username}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Credentials")
     if not verify_password(user.password,db_user.hashed_password):
+        logger.warning(f"Failed login — wrong password: {user.username}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail = "Invalid Credentials")
     access_token = create_access_token(data = {"sub" : str(db_user.id), "role" : db_user.role.value})
     refresh_token = create_refresh_token(data = {"sub" : str(db_user.id)})
+    logger.info(f"Successful login: {user.username}")
     return Token(access_token = access_token, refresh_token= refresh_token, token_type= "bearer")
 
 
